@@ -2,7 +2,7 @@
 
 A free, open-source app that lets you upload your own documents (PDFs) and ask questions about them using **RAG (Retrieval-Augmented Generation)**.
 
-### 🚀 Features
+### Features
 - Upload PDFs → automatically split & store in vector DB (Chroma).
 - Ask natural language questions.
 - Answers grounded in your documents.
