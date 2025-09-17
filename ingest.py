@@ -1,6 +1,5 @@
 import os
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from PyPDF2 import PdfReader
 from openai import OpenAI
 from pinecone import Pinecone
 from dotenv import load_dotenv
@@ -12,25 +11,38 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 index = pc.Index("text-embedding-3-large")
 
+def extract_text_from_pdf(file_path: str):
+    """Extract all text from a PDF file using PyPDF2."""
+    reader = PdfReader(file_path)
+    text = ""
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
+    return text
+
+def chunk_text(text: str, chunk_size=800, overlap=50):
+    """Split text into chunks with overlap."""
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start += chunk_size - overlap
+    return chunks
+
 def ingest_pdf(file_path: str):
     """Load a PDF, split into chunks, embed, and store in Pinecone."""
-    loader = PyPDFLoader(file_path)
-    documents = loader.load()
-
-    # Split into chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=50
-    )
-    chunks = text_splitter.split_documents(documents)
-
-    if not chunks:
+    text = extract_text_from_pdf(file_path)
+    if not text.strip():
         return 0
 
-    # Prepare embeddings
-    texts = [chunk.page_content for chunk in chunks]
+    chunks = chunk_text(text)
+
+    # Create embeddings
     embeddings = client.embeddings.create(
-        input=texts,
+        input=chunks,
         model="text-embedding-3-large"
     )
 
@@ -40,7 +52,7 @@ def ingest_pdf(file_path: str):
         vectors.append({
             "id": f"{os.path.basename(file_path)}_{i}",
             "values": emb.embedding,
-            "metadata": {"text": texts[i]}
+            "metadata": {"text": chunks[i]}
         })
 
     # Upsert into Pinecone
