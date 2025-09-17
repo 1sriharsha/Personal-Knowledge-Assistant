@@ -29,11 +29,11 @@ with st.sidebar:
     st.info("💡 Upload documents here and ask questions in the main panel.")
 
 # --- Tabs ---
-tab1, tab2 = st.tabs(["💬 Chat with your documents", "📊 Analytics Dashboard"])
+tab1, tab2 = st.tabs(["💬 Chat Assistant", "📊 Analytics Dashboard"])
 
 # --- Chat ---
 with tab1:
-    st.markdown("<h1 style='color:#0A66C2;'>Personal Knowledge Assistant</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color:#0A66C2;'>Chat with your documents</h1>", unsafe_allow_html=True)
     st.caption("Ask questions across your uploaded documents. Powered by OpenAI + Pinecone.")
 
     if "chat_history" not in st.session_state:
