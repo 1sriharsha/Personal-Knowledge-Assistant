@@ -13,7 +13,11 @@ def load_or_create_faiss():
     """Load FAISS index if it exists, else return None."""
     global faiss_db
     if os.path.exists(FAISS_PATH):
-        faiss_db = FAISS.load_local(FAISS_PATH, embedding_model, allow_dangerous_deserialization=True)
+        faiss_db = FAISS.load_local(
+            FAISS_PATH,
+            embedding_model,
+            allow_dangerous_deserialization=True
+        )
     return faiss_db
 
 def save_faiss():

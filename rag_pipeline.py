@@ -1,8 +1,8 @@
-from ingest import faiss_db, embedding_model, load_or_create_faiss
+from ingest import faiss_db, load_or_create_faiss
 from transformers import pipeline
 
-# Ensure FAISS is loaded on startup
-db = load_or_create_faiss()
+# Always reload FAISS on startup
+load_or_create_faiss()
 
 qa_model = pipeline("text2text-generation", model="google/flan-t5-base", device=-1)
 
