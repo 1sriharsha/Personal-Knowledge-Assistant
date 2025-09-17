@@ -7,7 +7,8 @@ embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_model)
 
 # Small free Hugging Face model for Q&A
-qa_model = pipeline("text-generation", model="tiiuae/falcon-7b-instruct", device=-1)
+qa_model = pipeline("text2text-generation", model="google/flan-t5-small")
+
 
 def rag_answer(question: str, k: int = 4) -> str:
     docs = db.similarity_search(question, k=k)
