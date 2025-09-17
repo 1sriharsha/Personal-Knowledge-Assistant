@@ -5,8 +5,11 @@ from rag_pipeline import rag_answer
 st.set_page_config(page_title="Personal Knowledge Assistant", layout="wide")
 st.title("Personal PDF Assistant")
 
+
+
 # Load FAISS index on startup
 load_or_create_faiss()
+
 
 # Upload PDFs
 uploaded_files = st.file_uploader("Upload your PDFs", type=["pdf"], accept_multiple_files=True)

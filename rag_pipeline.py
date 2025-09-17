@@ -7,17 +7,16 @@ db = load_or_create_faiss()
 qa_model = pipeline("text2text-generation", model="google/flan-t5-base", device=-1)
 
 def rag_answer(question: str, k: int = 4) -> str:
-    global db
-    if db is None:
+    global faiss_db
+    if faiss_db is None or len(faiss_db.index_to_docstore_id) == 0:
         return "No documents found. Please upload a PDF first."
 
-    docs = db.similarity_search(question, k=k)
+    docs = faiss_db.similarity_search(question, k=k)
 
     if docs:
         context = "\n\n".join([d.page_content[:400] for d in docs])
     else:
-        # Fallback: summarize entire index if query is too broad
-        all_docs = db.similarity_search("", k=8)
+        all_docs = faiss_db.similarity_search("", k=8)
         context = " ".join([d.page_content[:400] for d in all_docs]) if all_docs else ""
 
     if not context:
