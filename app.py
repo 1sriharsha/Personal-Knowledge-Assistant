@@ -1,13 +1,13 @@
 import streamlit as st
-import os
 from ingest import ingest_pdf
-from rag_pipeline import rag_answer
+from rag_pipeline import rag_answer, db
 
 st.set_page_config(page_title="Personal Knowledge Assistant", layout="wide")
+st.title("Personal PDF summarizer")
+import os
+os.environ["CHROMA_TELEMETRY"] = "False"
 
-st.title("Personal Knowledge Assistant")
-
-# Upload documents
+# Upload PDFs
 uploaded_files = st.file_uploader("Upload your PDFs", type=["pdf"], accept_multiple_files=True)
 if uploaded_files:
     for file in uploaded_files:
@@ -15,6 +15,9 @@ if uploaded_files:
             f.write(file.getbuffer())
         chunks = ingest_pdf(file.name)
         st.success(f"✅ Ingested {chunks} chunks from {file.name}")
+
+    # Debug: show total docs ingested
+    st.info(f"Total documents stored: {db._collection.count()}")
 
 st.divider()
 
@@ -24,6 +27,9 @@ query = st.text_input("Type your question here...")
 
 if query:
     with st.spinner("Thinking..."):
-        answer = rag_answer(query)
-    st.write("### 🤖 Answer:")
-    st.write(answer)
+        try:
+            answer = rag_answer(query)
+            st.write("### 🤖 Answer:")
+            st.write(answer)
+        except Exception as e:
+            st.error(f"Error while answering: {e}")

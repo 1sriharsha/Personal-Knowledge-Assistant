@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.11 (Personal Knowledge Assistant)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.11 (Personal Knowledge Assistant)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.11 virtualenv at ~/myspace/Personal Knowledge Assistant/.assistant_venv" project-jdk-type="Python SDK" />
 </project>

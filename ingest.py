@@ -1,32 +1,25 @@
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from transformers import pipeline
+from langchain_huggingface import HuggingFaceEmbeddings
 
 CHROMA_PATH = "chroma_store"
 
-# Embedding model
 embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# Load Chroma vector store
-db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_model)
+def ingest_pdf(file_path: str):
+    loader = PyPDFLoader(file_path)
+    docs = loader.load()
 
-# Use a small model for free hosting (fast & lightweight)
-qa_model = pipeline("text2text-generation", model="google/flan-t5-small")
+    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
+    splits = splitter.split_documents(docs)
 
-def rag_answer(question: str, k: int = 4) -> str:
-    docs = db.similarity_search(question, k=k)
-    context = "\n\n".join([d.page_content for d in docs])
+    texts = [doc.page_content for doc in splits]
+    metadatas = [doc.metadata for doc in splits]
 
-    prompt = f"""
-    You are a helpful assistant. Answer the question based only on the context below.
-    If the answer is not in the context, say "I don't know."
+    db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_model)
+    db.add_texts(texts=texts, metadatas=metadatas)
 
-    Context:
-    {context}
+    return len(splits)
 
-    Question: {question}
-    Answer:
-    """
 
-    result = qa_model(prompt, max_new_tokens=200)
-    return result[0]["generated_text"]
