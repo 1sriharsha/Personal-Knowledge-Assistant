@@ -1,8 +1,5 @@
 streamlit
-langchain
-langchain-community
-langchain-huggingface
-sentence-transformers
-transformers
+openai
+pinecone
+python-dotenv
 pypdf
-faiss-cpu

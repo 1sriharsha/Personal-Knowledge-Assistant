@@ -1,38 +1,47 @@
-from ingest import faiss_db, load_or_create_faiss
-from transformers import pipeline
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+from pinecone import Pinecone
 
-# Always reload FAISS on startup
-load_or_create_faiss()
+load_dotenv()
 
-qa_model = pipeline("text2text-generation", model="google/flan-t5-base", device=-1)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX")
 
-def rag_answer(question: str, k: int = 4) -> str:
-    global faiss_db
-    if faiss_db is None or len(faiss_db.index_to_docstore_id) == 0:
-        return "No documents found. Please upload a PDF first."
+client = OpenAI(api_key=OPENAI_API_KEY)
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(PINECONE_INDEX)
 
-    docs = faiss_db.similarity_search(question, k=k)
+def rag_answer(query, top_k=3):
+    # 1. Embed the query
+    query_embedding = client.embeddings.create(
+        model="text-embedding-3-large",
+        input=query
+    ).data[0].embedding
 
-    if docs:
-        context = "\n\n".join([d.page_content[:400] for d in docs])
-    else:
-        all_docs = faiss_db.similarity_search("", k=8)
-        context = " ".join([d.page_content[:400] for d in all_docs]) if all_docs else ""
+    # 2. Query Pinecone
+    results = index.query(
+        vector=query_embedding,
+        top_k=top_k,
+        include_metadata=True,
+        namespace=""
+    )
 
-    if not context:
-        return "I don't know."
+    if not results.get("matches"):
+        return "No relevant documents found."
 
-    prompt = f"""
-    You are a helpful assistant. Answer the question based only on the context below.
-    If the question is very broad (like 'what is this document about?'), summarize the content.
-    If the answer is not in the context, say "I don't know."
+    # 3. Collect context
+    context = " ".join([match["metadata"]["text"] for match in results["matches"]])
 
-    Context:
-    {context}
+    # 4. Ask GPT with context
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"Context: {context}\n\nQuestion: {query}"}
+        ]
+    )
 
-    Question: {question}
-    Answer:
-    """
+    return completion.choices[0].message.content
 
-    result = qa_model(prompt, max_new_tokens=200)
-    return result[0]["generated_text"]

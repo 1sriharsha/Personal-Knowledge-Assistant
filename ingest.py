@@ -1,45 +1,50 @@
 import os
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from dotenv import load_dotenv
+from openai import OpenAI
+from pinecone import Pinecone
+from PyPDF2 import PdfReader
 
-FAISS_PATH = "faiss_index"
+load_dotenv()
 
-embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-faiss_db = None
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX")
 
-def load_or_create_faiss():
-    """Load FAISS index if it exists, else return None."""
-    global faiss_db
-    if os.path.exists(FAISS_PATH):
-        faiss_db = FAISS.load_local(
-            FAISS_PATH,
-            embedding_model,
-            allow_dangerous_deserialization=True
-        )
-    return faiss_db
+client = OpenAI(api_key=OPENAI_API_KEY)
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(PINECONE_INDEX)
 
-def save_faiss():
-    """Persist FAISS index to disk."""
-    global faiss_db
-    if faiss_db:
-        faiss_db.save_local(FAISS_PATH)
+def embed_text(text: str):
+    """Generate embeddings from OpenAI model"""
+    response = client.embeddings.create(
+        model="text-embedding-3-large",
+        input=text
+    )
+    return response.data[0].embedding
 
-def ingest_pdf(file_path: str):
-    """Load PDF, split into chunks, and add to FAISS index."""
-    global faiss_db
+def chunk_text(text, chunk_size=500, overlap=50):
+    """Split text into chunks for embedding"""
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(len(text), start + chunk_size)
+        chunks.append(text[start:end])
+        start += chunk_size - overlap
+    return chunks
 
-    loader = PyPDFLoader(file_path)
-    docs = loader.load()
+def ingest_pdf(file_path):
+    """Extract text from PDF and store embeddings in Pinecone"""
+    reader = PdfReader(file_path)
+    full_text = ""
+    for page in reader.pages:
+        full_text += page.extract_text() or ""
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
-    splits = splitter.split_documents(docs)
+    chunks = chunk_text(full_text)
 
-    if faiss_db is None:
-        faiss_db = FAISS.from_documents(splits, embedding_model)
-    else:
-        faiss_db.add_documents(splits)
+    vectors = []
+    for i, chunk in enumerate(chunks):
+        embedding = embed_text(chunk)
+        vectors.append((f"chunk-{i}", embedding, {"text": chunk}))
 
-    save_faiss()
-    return len(splits)
+    index.upsert(vectors, namespace="")
+    return len(chunks)
