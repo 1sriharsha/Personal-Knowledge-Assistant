@@ -1,50 +1,54 @@
 import os
-from dotenv import load_dotenv
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from openai import OpenAI
 from pinecone import Pinecone
-from PyPDF2 import PdfReader
+from dotenv import load_dotenv
+from rag_pipeline import track_embedding, track_pinecone
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX = os.getenv("PINECONE_INDEX")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+index = pc.Index("text-embedding-3-large")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(PINECONE_INDEX)
+def ingest_pdf(file_path: str):
+    """Load a PDF, split into chunks, embed, and store in Pinecone."""
+    loader = PyPDFLoader(file_path)
+    documents = loader.load()
 
-def embed_text(text: str):
-    """Generate embeddings from OpenAI model"""
-    response = client.embeddings.create(
-        model="text-embedding-3-large",
-        input=text
+    # Split into chunks
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,
+        chunk_overlap=50
     )
-    return response.data[0].embedding
+    chunks = text_splitter.split_documents(documents)
 
-def chunk_text(text, chunk_size=500, overlap=50):
-    """Split text into chunks for embedding"""
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = min(len(text), start + chunk_size)
-        chunks.append(text[start:end])
-        start += chunk_size - overlap
-    return chunks
+    if not chunks:
+        return 0
 
-def ingest_pdf(file_path):
-    """Extract text from PDF and store embeddings in Pinecone"""
-    reader = PdfReader(file_path)
-    full_text = ""
-    for page in reader.pages:
-        full_text += page.extract_text() or ""
+    # Prepare embeddings
+    texts = [chunk.page_content for chunk in chunks]
+    embeddings = client.embeddings.create(
+        input=texts,
+        model="text-embedding-3-large"
+    )
 
-    chunks = chunk_text(full_text)
-
+    # Build Pinecone vectors
     vectors = []
-    for i, chunk in enumerate(chunks):
-        embedding = embed_text(chunk)
-        vectors.append((f"chunk-{i}", embedding, {"text": chunk}))
+    for i, emb in enumerate(embeddings.data):
+        vectors.append({
+            "id": f"{os.path.basename(file_path)}_{i}",
+            "values": emb.embedding,
+            "metadata": {"text": texts[i]}
+        })
 
-    index.upsert(vectors, namespace="")
+    # Upsert into Pinecone
+    index.upsert(vectors=vectors)
+
+    # --- Track Metrics ---
+    embedding_tokens = embeddings.usage.total_tokens
+    track_embedding(tokens=embedding_tokens, vectors=len(chunks))
+    track_pinecone(writes=len(chunks))
+
     return len(chunks)
