@@ -1,26 +1,27 @@
-from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from ingest import faiss_db, embedding_model, load_or_create_faiss
 from transformers import pipeline
 
-CHROMA_PATH = "chroma_store"
+# Ensure FAISS is loaded on startup
+db = load_or_create_faiss()
 
-embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
-db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_model)
-
-qa_model = pipeline("text2text-generation", model="google/flan-t5-base")
+qa_model = pipeline("text2text-generation", model="google/flan-t5-base", device=-1)
 
 def rag_answer(question: str, k: int = 4) -> str:
+    global db
+    if db is None:
+        return "No documents found. Please upload a PDF first."
+
     docs = db.similarity_search(question, k=k)
 
     if docs:
         context = "\n\n".join([d.page_content[:400] for d in docs])
     else:
-        # Fallback: summarize the whole document if no relevant context found
+        # Fallback: summarize entire index if query is too broad
         all_docs = db.similarity_search("", k=8)
-        if not all_docs:
-            return "No documents found. Please upload a PDF first."
-        context = " ".join([d.page_content[:400] for d in all_docs])
+        context = " ".join([d.page_content[:400] for d in all_docs]) if all_docs else ""
+
+    if not context:
+        return "I don't know."
 
     prompt = f"""
     You are a helpful assistant. Answer the question based only on the context below.
