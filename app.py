@@ -1,4 +1,5 @@
 import os
+import shutil
 import streamlit as st
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
@@ -10,8 +11,6 @@ from transformers import pipeline
 FAISS_PATH = "faiss_index"
 embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 faiss_db = None
-
-# QA model
 qa_model = pipeline("text2text-generation", model="google/flan-t5-base", device=-1)
 
 # ---- FAISS Helpers ----
@@ -43,6 +42,12 @@ def ingest_pdf(file_path: str):
 
     save_faiss()
     return len(splits)
+
+def refresh_db():
+    """Completely wipe FAISS DB (forces re-upload)."""
+    global faiss_db
+    shutil.rmtree(FAISS_PATH, ignore_errors=True)
+    faiss_db = None
 
 def rag_answer(question: str, k: int = 4) -> str:
     global faiss_db
@@ -77,11 +82,17 @@ def rag_answer(question: str, k: int = 4) -> str:
 
 # ---- Streamlit UI ----
 st.set_page_config(page_title="Personal Knowledge Assistant", layout="wide")
-st.title("Personal PDF Assistant")
+st.title("📚 Personal Knowledge Assistant (FAISS persistent)")
 
 # Load FAISS index at startup
 load_or_create_faiss()
 
+# 🔄 Add refresh button
+if st.button("🔄 Refresh Knowledge Base"):
+    refresh_db()
+    st.success("Knowledge base cleared! Please upload new PDFs to rebuild.")
+
+# Upload PDFs
 uploaded_files = st.file_uploader("Upload your PDFs", type=["pdf"], accept_multiple_files=True)
 if uploaded_files:
     for file in uploaded_files:
