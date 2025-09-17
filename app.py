@@ -82,7 +82,7 @@ def rag_answer(question: str, k: int = 4) -> str:
 
 # ---- Streamlit UI ----
 st.set_page_config(page_title="Personal Knowledge Assistant", layout="wide")
-st.title("📚 Personal Knowledge Assistant (FAISS persistent)")
+st.title("Personal Knowledge Assistant")
 
 # Load FAISS index at startup
 load_or_create_faiss()
